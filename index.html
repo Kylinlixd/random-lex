@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Cache-Control" content="no-cache, must-revalidate">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>random-lex · 随机词条抽取</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23111111'/%3E%3Ccircle cx='32' cy='32' r='9' fill='%23F7F6F3'/%3E%3Ccircle cx='68' cy='68' r='9' fill='%239F2F2D'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">random-lex<small>随机词条 · 专注学习</small></div>
+      <button id="manageBtn" class="ghost-btn">词库管理</button>
+    </header>
+
+    <main>
+      <!-- 词条轮盘 -->
+      <section class="card-area">
+        <div class="term-card" id="termCard">
+          <span class="cat" id="termCat">词条轮盘</span>
+          <h1 class="term" id="termTitle">准备就绪</h1>
+          <p class="def" id="termDef">点击下方「开始抽取」，词条会快速闪动两三秒后落定，为你选出一个值得学习的概念。</p>
+          <div class="card-foot">
+            <span id="metaInfo" class="mono">词库 0 条 · 已抽 0 次</span>
+            <button id="ttsBtn" class="ghost-btn" title="用浏览器语音朗读词条和释义">朗读</button>
+          </div>
+        </div>
+        <div class="card-actions">
+          <button id="drawBtn" class="primary-btn">开始抽取</button>
+        </div>
+        <p class="hint">按 <kbd>空格</kbd> 也可抽取 · 循环随机，一轮抽完自动重新洗牌</p>
+      </section>
+
+      <!-- 专注计时 -->
+      <section class="panel">
+        <div class="panel-head">
+          <h2>专注计时</h2>
+          <span class="total mono" id="timerTotal">共 21 分钟</span>
+        </div>
+
+        <div class="slider-tabs" role="tablist">
+          <button class="slider-tab active" type="button" data-key="study">学习</button>
+          <button class="slider-tab" type="button" data-key="memory">记忆</button>
+          <button class="slider-tab" type="button" data-key="recite">复述</button>
+        </div>
+
+        <div class="clock mono" id="timerClock">15:00</div>
+        <div class="track"><div class="bar" id="timerBar"></div></div>
+
+        <p class="slider-caption">调整时长</p>
+        <div class="slider-panel">
+          <div class="slider-row" data-row="study">
+            <input type="range" id="s-study" aria-label="学习时长" min="10" max="60" step="1" value="15">
+            <output id="v-study">15 分钟</output>
+          </div>
+          <div class="slider-row hidden" data-row="memory">
+            <input type="range" id="s-memory" aria-label="记忆时长" min="5" max="30" step="1" value="5">
+            <output id="v-memory">5 分钟</output>
+          </div>
+          <div class="slider-row hidden" data-row="recite">
+            <input type="range" id="s-recite" aria-label="复述时长" min="1" max="5" step="1" value="1">
+            <output id="v-recite">1 分钟</output>
+          </div>
+        </div>
+
+        <div class="timer-actions">
+          <button id="timerBtn" class="primary-btn small">开始专注</button>
+          <button id="resetBtn" class="ghost-btn">重置</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- 词库管理 -->
+  <div class="modal hidden" id="manageModal">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h2>词库管理</h2>
+        <button id="closeModalBtn" class="ghost-btn">关闭</button>
+      </div>
+
+      <div class="m-section">
+        <h3>添加 / 更新词条</h3>
+        <div class="add-grid">
+          <input id="addTermInput" type="text" placeholder="词条名，如：熵 或 Entropy">
+          <input id="addCatInput" type="text" placeholder="分类（可选），如：物理">
+        </div>
+        <textarea id="addDefInput" rows="2" placeholder="释义"></textarea>
+        <button id="addBtn" class="ghost-btn">添加到词库</button>
+      </div>
+
+      <div class="m-section">
+        <h3>批量导入 / 导出</h3>
+        <textarea id="importText" rows="4" placeholder="支持两种格式：
+1）JSON 数组：[{term, def, cat}]
+2）每行一条：词条[Tab 或 ｜ 或 ： 或 -]释义"></textarea>
+        <div class="btn-row">
+          <input type="file" id="importFile" accept=".txt,.json,.csv,.tsv" hidden>
+          <button id="importFileBtn" class="ghost-btn">选择文件</button>
+          <button id="importBtn" class="ghost-btn">导入文本</button>
+          <button id="exportBtn" class="ghost-btn">导出 JSON</button>
+        </div>
+      </div>
+
+      <div class="m-section">
+        <h3>从维基百科抓取</h3>
+        <div class="btn-row">
+          <input id="wikiInput" type="text" placeholder="输入词条名，如：量子纠缠">
+          <button id="wikiBtn" class="ghost-btn">抓取释义</button>
+        </div>
+        <p class="muted small">调用维基百科开放接口获取摘要并加入词库，需要联网；数据随后缓存于本地。</p>
+      </div>
+
+      <div class="m-section">
+        <h3>词条列表</h3>
+        <input id="listSearch" type="text" placeholder="搜索词条或释义…">
+        <div id="termList" class="term-list"></div>
+        <div class="btn-row">
+          <button id="resetBuiltinBtn" class="ghost-btn danger">重置为内置词库</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
