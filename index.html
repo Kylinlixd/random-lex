@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>random-lex · 随机词条抽取</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23111111'/%3E%3Ccircle cx='32' cy='32' r='9' fill='%23F7F6F3'/%3E%3Ccircle cx='68' cy='68' r='9' fill='%239F2F2D'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
   <div class="wrap">
@@ -93,15 +93,16 @@
 
       <div class="m-section">
         <h3>批量导入 / 导出</h3>
-        <textarea id="importText" rows="4" placeholder="支持两种格式：
+        <textarea id="importText" rows="4" placeholder="支持粘贴导入：
 1）JSON 数组：[{term, def, cat}]
 2）每行一条：词条[Tab 或 ｜ 或 ： 或 -]释义"></textarea>
         <div class="btn-row">
-          <input type="file" id="importFile" accept=".txt,.json,.csv,.tsv" hidden>
+          <input type="file" id="importFile" accept=".txt,.json,.csv,.tsv,.xlsx,.xls" hidden>
           <button id="importFileBtn" class="ghost-btn">选择文件</button>
           <button id="importBtn" class="ghost-btn">导入文本</button>
           <button id="exportBtn" class="ghost-btn">导出 JSON</button>
         </div>
+        <p class="muted small">文件格式：.txt 每行一条 · .csv/.tsv 表格（首行可带表头：词条 / 释义 / 分类）· .xlsx/.xls Excel</p>
       </div>
 
       <div class="m-section">
@@ -126,7 +127,7 @@
 
   <div id="toast"></div>
 
-  <script src="data.js"></script>
-  <script src="app.js"></script>
+  <script src="data.js?v=2"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>

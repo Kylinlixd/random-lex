@@ -587,16 +587,116 @@
     return out;
   }
 
-  function applyImport() {
-    var items = parseImport(importText.value);
-    if (!items.length) { toast('没有解析到有效词条，请检查格式'); return; }
+  /* ---------- 表格解析：csv / tsv / xlsx 通用 ---------- */
+
+  // 解析 CSV/TSV 文本为二维数组（支持引号包裹字段）
+  function parseCSV(text, delimiter) {
+    var rows = [], row = [], field = '', inQuotes = false;
+    var len = text.length;
+    for (var i = 0; i < len; i++) {
+      var c = text[i];
+      if (inQuotes) {
+        if (c === '"') {
+          if (text[i + 1] === '"') { field += '"'; i++; }
+          else inQuotes = false;
+        } else field += c;
+      } else {
+        if (c === '"') inQuotes = true;
+        else if (c === delimiter || c === '\n' || c === '\r') {
+          row.push(field); field = '';
+          if (c === '\n' || c === '\r') {
+            if (c === '\r' && text[i + 1] === '\n') i++;
+            rows.push(row); row = [];
+          }
+        } else field += c;
+      }
+    }
+    if (field !== '' || row.length) { row.push(field); rows.push(row); }
+    return rows.filter(function (r) {
+      return r.some(function (f) { return String(f).trim() !== ''; });
+    });
+  }
+
+  function indexOfHeader(header, keys) {
+    for (var i = 0; i < keys.length; i++) {
+      var idx = header.indexOf(keys[i]);
+      if (idx >= 0) return idx;
+    }
+    return -1;
+  }
+
+  // 二维数组 → 词条数组：自动识别表头（词条/释义/分类列），无表头按列序
+  function rowsToTerms(rows) {
+    var out = [];
+    if (!rows || !rows.length) return out;
+    var start = 0;
+    var termCol = 0, defCol = 1, catCol = 2;
+    var first = rows[0].map(function (v) {
+      return String(v == null ? '' : v).trim().toLowerCase();
+    });
+    if (first.some(function (h) {
+      return ['term', '词条', 'name', '标题', '名称', 'word'].indexOf(h) >= 0;
+    })) {
+      start = 1;
+      termCol = indexOfHeader(first, ['term', '词条', 'name', '标题', '名称', 'word']);
+      defCol = indexOfHeader(first, ['def', 'definition', '释义', '解释', '描述', 'description', 'meaning', '定义']);
+      catCol = indexOfHeader(first, ['cat', 'category', '分类', '类别']);
+      if (termCol < 0) termCol = 0;
+      if (defCol < 0) defCol = termCol === 0 ? 1 : 0;
+      if (catCol < 0) catCol = 2;
+    }
+    function cell(r, idx) {
+      var v = r[idx];
+      return v == null ? '' : String(v).trim();
+    }
+    for (var i = start; i < rows.length; i++) {
+      var r = rows[i];
+      if (!r || !r.length) continue;
+      var term = cell(r, termCol);
+      if (!term) continue;
+      out.push({ term: term, def: cell(r, defCol), cat: cell(r, catCol) });
+    }
+    return out;
+  }
+
+  // 解析 xlsx/xls：动态加载 SheetJS（仅在使用时加载，失败则提示降级格式）
+  function importXLSX(file) {
+    return new Promise(function (resolve, reject) {
+      if (typeof XLSX === 'undefined') {
+        var s = document.createElement('script');
+        s.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+        s.onload = function () { doRead(); };
+        s.onerror = function () { reject(new Error('SheetJS 加载失败')); };
+        document.head.appendChild(s);
+      } else {
+        doRead();
+      }
+      function doRead() {
+        try {
+          file.arrayBuffer().then(function (ab) {
+            var wb = XLSX.read(ab, { type: 'array' });
+            var rows = [];
+            wb.SheetNames.forEach(function (name) {
+              var ws = wb.Sheets[name];
+              if (!ws) return;
+              var arr = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false });
+              rows = rows.concat(arr);
+            });
+            resolve(rows);
+          }, reject);
+        } catch (e) { reject(e); }
+      }
+    });
+  }
+
+  function applyImport(items) {
+    if (!items || !items.length) { toast('没有解析到有效词条，请检查格式'); return; }
     var added = 0, updated = 0;
     items.forEach(function (it) {
       if (addTermSilent(it.term, it.def, it.cat)) added++; else updated++;
     });
     saveTerms();
     renderList(listSearch.value);
-    importText.value = '';
     toast('导入完成：新增 ' + added + ' 条，更新 ' + updated + ' 条');
   }
 
@@ -680,17 +780,39 @@
   modal.addEventListener('click', function (e) { if (e.target === modal) closeModal(); });
 
   $('addBtn').addEventListener('click', addTerm);
-  $('importBtn').addEventListener('click', applyImport);
+  $('importBtn').addEventListener('click', function () {
+    applyImport(parseImport(importText.value));
+    importText.value = '';
+  });
   $('exportBtn').addEventListener('click', exportJSON);
   $('importFileBtn').addEventListener('click', function () { importFile.click(); });
   importFile.addEventListener('change', function () {
     var f = importFile.files && importFile.files[0];
     if (!f) return;
-    f.text().then(function (text) {
-      importText.value = text;
-      applyImport();
-    });
     importFile.value = '';
+    var name = (f.name || '').toLowerCase();
+    if (/\.xlsx?$/.test(name)) {
+      // Excel：动态加载 SheetJS 解析
+      importXLSX(f).then(function (rows) {
+        applyImport(rowsToTerms(rows));
+      }).catch(function () {
+        toast('Excel 解析失败：可能无法加载解析库，请改用 csv / tsv / txt 格式');
+      });
+    } else {
+      f.text().then(function (text) {
+        var items;
+        if (/\.json$/.test(name)) {
+          items = parseImport(text); // JSON 数组
+        } else if (/\.csv$/.test(name)) {
+          items = rowsToTerms(parseCSV(text, ',')); // 逗号表格
+        } else if (/\.tsv$/.test(name)) {
+          items = rowsToTerms(parseCSV(text, '\t')); // 制表符表格
+        } else {
+          items = parseImport(text); // txt 等：每行一条
+        }
+        applyImport(items);
+      });
+    }
   });
   $('wikiBtn').addEventListener('click', fetchWiki);
   wikiInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') fetchWiki(); });
